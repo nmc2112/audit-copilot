@@ -12,7 +12,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from .agent import AgentResult, AuditAgent
 from .config import ROOT, load_settings
 from .fec import FECFormatError, load_fec, parse_fec
-from .llm import LLMClient, build_client
+from .llm import LLMClient, LLMError, build_client
 from .ratelimit import RateLimitMiddleware, rate_limit_from_env
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -52,6 +52,9 @@ def create_app(llm: LLMClient | None = None) -> FastAPI:
                 ledger = parse_fec(pd.read_csv(io.StringIO(text), sep=sep, dtype=str, keep_default_na=False))
             except FECFormatError as exc:
                 raise HTTPException(422, str(exc)) from exc
-        return AuditAgent(ledger, settings, client).run(question)
+        try:
+            return AuditAgent(ledger, settings, client).run(question)
+        except LLMError as exc:  # provider overloaded or down: clear 503 instead of a bare 500
+            raise HTTPException(503, "LLM temporarily unavailable, retry in a minute.") from exc
 
     return app

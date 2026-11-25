@@ -32,7 +32,7 @@ def test_cloud_config_uses_hosted_model_and_secret_env():
     cfg = load_settings(ROOT / "config" / "settings.cloud.yaml")
     assert cfg.llm.primary.base_url.startswith("https://")
     assert cfg.llm.primary.api_key_env == "LLM_API_KEY"
-    assert cfg.llm.fallback is None
+    assert cfg.llm.fallback is not None and cfg.llm.fallback.api_key_env == "LLM_API_KEY"
 
 
 def test_gemini_thought_signature_is_echoed_back():
@@ -47,3 +47,25 @@ def test_gemini_thought_signature_is_echoed_back():
     plain = _assistant_message(LLMResponse(tool_calls=_parse_tool_calls({"tool_calls": [
         {"id": "c2", "function": {"name": "benford_test", "arguments": "{}"}}]})))
     assert "extra_content" not in plain["tool_calls"][0]
+
+
+def test_llm_outage_returns_503():
+    from fastapi.testclient import TestClient
+
+    from audit_copilot.api import create_app
+    from audit_copilot.llm import LLMError, LLMResponse
+
+    class DownLLM:
+        def chat(self, messages, tools=None, json_mode=False) -> LLMResponse:
+            raise LLMError("All LLM clients failed: HTTP 503")
+
+    client = TestClient(create_app(llm=DownLLM()))
+    resp = client.post("/analyze", data={"question": "Run a full audit"})
+    assert resp.status_code == 503
+
+
+def test_cloud_config_has_fallback_model():
+    from audit_copilot.config import load_settings
+
+    cfg = load_settings(ROOT / "config" / "settings.cloud.yaml")
+    assert cfg.llm.fallback is not None and cfg.llm.fallback.model != cfg.llm.primary.model

@@ -6,10 +6,13 @@ llm:
     base_url: https://generativelanguage.googleapis.com/v1beta/openai
     model: gemini-3.8-flash                # Gemini API free tier (OpenAI-compatible endpoint)
     api_key_env: LLM_API_KEY       # injected from Secret Manager, never stored in the image
-  fallback: null
+  fallback:                                # another model with its own capacity and quota
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai
+    model: gemini-3.5-flash-lite
+    api_key_env: LLM_API_KEY
   timeout_s: 60
   max_retries: 3
-  backoff_s: 1.0
+  backoff_s: 2.0
   temperature: 0.0
 
 agent:
