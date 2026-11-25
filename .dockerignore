@@ -3,5 +3,6 @@
 __pycache__
 tests
 evals
-data
-*.md
+data/*
+!data/sample_fec.txt
+README.md

@@ -1,0 +1,28 @@
+# Configuration used on Cloud Run: hosted model through an OpenAI-compatible API.
+prompt_version: v1
+
+llm:
+  primary:
+    base_url: https://api.mistral.ai/v1
+    model: mistral-small-latest
+    api_key_env: MISTRAL_API_KEY       # injected from Secret Manager, never stored in the image
+  fallback: null
+  timeout_s: 60
+  max_retries: 3
+  backoff_s: 1.0
+  temperature: 0.0
+
+agent:
+  max_iterations: 6
+  max_items_per_tool: 20
+  report_max_attempts: 3
+
+tools:
+  enabled:
+    - ledger_summary
+    - weekend_entries
+    - round_amounts
+    - duplicate_entries
+    - unbalanced_entries
+    - late_validation
+    - benford_test

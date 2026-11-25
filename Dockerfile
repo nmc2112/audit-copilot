@@ -9,9 +9,10 @@ RUN pip install --no-cache-dir .
 
 COPY config/ config/
 COPY prompts/ prompts/
+COPY data/sample_fec.txt data/sample_fec.txt
 
 RUN useradd --create-home appuser
 USER appuser
 EXPOSE 8080
 
-CMD ["uvicorn", "audit_copilot.api:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["sh", "-c", "uvicorn audit_copilot.api:create_app --factory --host 0.0.0.0 --port ${PORT:-8080}"]
