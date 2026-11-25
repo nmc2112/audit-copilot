@@ -8,6 +8,7 @@ from typing import Annotated
 
 import pandas as pd
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import RedirectResponse
 
 from .agent import AgentResult, AuditAgent
 from .config import ROOT, load_settings
@@ -29,6 +30,10 @@ def create_app(llm: LLMClient | None = None) -> FastAPI:
                               "synthetic sample (data/sample_fec.txt).")
     if (limit := rate_limit_from_env()) > 0:
         app.add_middleware(RateLimitMiddleware, limit_per_hour=limit)
+
+    @app.get("/", include_in_schema=False)
+    def root() -> RedirectResponse:
+        return RedirectResponse("/docs")
 
     @app.get("/health")
     def health() -> dict:
