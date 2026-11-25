@@ -4,11 +4,11 @@ prompt_version: v1
 llm:
   primary:
     base_url: https://generativelanguage.googleapis.com/v1beta/openai
-    model: gemini-3.8-flash                # Gemini API free tier (OpenAI-compatible endpoint)
+    model: gemini-3.5-flash-lite           # highest free-tier quota; 3.8 Flash hit 429 on free tier
     api_key_env: LLM_API_KEY       # injected from Secret Manager, never stored in the image
   fallback:                                # another model with its own capacity and quota
     base_url: https://generativelanguage.googleapis.com/v1beta/openai
-    model: gemini-3.5-flash-lite
+    model: gemini-3.8-flash
     api_key_env: LLM_API_KEY
   timeout_s: 60
   max_retries: 3
