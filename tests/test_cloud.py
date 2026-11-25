@@ -31,5 +31,19 @@ def test_rate_limit(monkeypatch):
 def test_cloud_config_uses_hosted_model_and_secret_env():
     cfg = load_settings(ROOT / "config" / "settings.cloud.yaml")
     assert cfg.llm.primary.base_url.startswith("https://")
-    assert cfg.llm.primary.api_key_env == "MISTRAL_API_KEY"
+    assert cfg.llm.primary.api_key_env == "LLM_API_KEY"
     assert cfg.llm.fallback is None
+
+
+def test_gemini_thought_signature_is_echoed_back():
+    from audit_copilot.agent import _assistant_message
+    from audit_copilot.llm import LLMResponse, _parse_tool_calls
+
+    message = {"tool_calls": [{"id": "c1", "type": "function",
+                               "function": {"name": "benford_test", "arguments": "{}"},
+                               "extra_content": {"google": {"thought_signature": "sig"}}}]}
+    out = _assistant_message(LLMResponse(tool_calls=_parse_tool_calls(message)))
+    assert out["tool_calls"][0]["extra_content"] == {"google": {"thought_signature": "sig"}}
+    plain = _assistant_message(LLMResponse(tool_calls=_parse_tool_calls({"tool_calls": [
+        {"id": "c2", "function": {"name": "benford_test", "arguments": "{}"}}]})))
+    assert "extra_content" not in plain["tool_calls"][0]

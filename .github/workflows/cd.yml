@@ -80,7 +80,7 @@ jobs:
             AUDIT_COPILOT_CONFIG=/app/config/settings.cloud.yaml
             RATE_LIMIT_PER_HOUR=20
           secrets: |
-            MISTRAL_API_KEY=mistral-api-key:latest
+            LLM_API_KEY=llm-api-key:latest
           flags: >-
             --allow-unauthenticated
             --service-account=${{ vars.GCP_RUNTIME_SERVICE_ACCOUNT }}

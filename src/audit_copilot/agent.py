@@ -95,11 +95,14 @@ def deterministic_report(tool_results: list[ToolResult]) -> AuditReport:
 def _assistant_message(resp: LLMResponse) -> dict:
     msg: dict = {"role": "assistant", "content": resp.content or ""}
     if resp.tool_calls:
-        msg["tool_calls"] = [
-            {"id": tc.id, "type": "function",
-             "function": {"name": tc.name, "arguments": tc.raw_arguments or json.dumps(tc.arguments)}}
-            for tc in resp.tool_calls
-        ]
+        calls = []
+        for tc in resp.tool_calls:
+            call: dict = {"id": tc.id, "type": "function",
+                          "function": {"name": tc.name, "arguments": tc.raw_arguments or json.dumps(tc.arguments)}}
+            if tc.extra_content:  # Gemini requires its thought signature to be sent back
+                call["extra_content"] = tc.extra_content
+            calls.append(call)
+        msg["tool_calls"] = calls
     return msg
 
 

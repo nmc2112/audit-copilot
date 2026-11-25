@@ -29,6 +29,7 @@ class ToolCall(BaseModel):
     arguments: dict = Field(default_factory=dict)
     raw_arguments: str = ""
     parse_error: str | None = None
+    extra_content: dict | None = None  # provider data to echo back (e.g. Gemini thought signatures)
 
 
 class LLMResponse(BaseModel):
@@ -54,9 +55,10 @@ def _parse_tool_calls(message: dict) -> list[ToolCall]:
     for i, tc in enumerate(message.get("tool_calls") or []):
         fn = tc.get("function", {})
         raw = fn.get("arguments") or "{}"
+        extra = tc.get("extra_content")
         if isinstance(raw, dict):  # some servers return a dict instead of a JSON string
             calls.append(ToolCall(id=tc.get("id") or f"call_{i}", name=fn.get("name", ""),
-                                  arguments=raw, raw_arguments=json.dumps(raw)))
+                                  arguments=raw, raw_arguments=json.dumps(raw), extra_content=extra))
             continue
         try:
             args, error = json.loads(raw), None
@@ -64,7 +66,7 @@ def _parse_tool_calls(message: dict) -> list[ToolCall]:
             args, error = {}, f"Invalid JSON arguments: {exc}"
         calls.append(ToolCall(id=tc.get("id") or f"call_{i}", name=fn.get("name", ""),
                               arguments=args if isinstance(args, dict) else {},
-                              raw_arguments=raw, parse_error=error))
+                              raw_arguments=raw, parse_error=error, extra_content=extra))
     return calls
 
 
