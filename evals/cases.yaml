@@ -1,0 +1,34 @@
+# Each case: a question, the tools a good agent should call, and (optionally)
+# the injected anomaly type whose entries should be cited in the report.
+- id: weekend
+  question: "Are there journal entries posted during weekends? List them."
+  expected_tools: [weekend_entries]
+  anomaly: weekend_entries
+- id: round
+  question: "Do we have large entries with suspiciously round amounts?"
+  expected_tools: [round_amounts]
+  anomaly: round_amounts
+- id: duplicates
+  question: "Check the ledger for possible duplicate invoices."
+  expected_tools: [duplicate_entries]
+  anomaly: duplicate_entries
+- id: unbalanced
+  question: "Is every entry balanced between debit and credit?"
+  expected_tools: [unbalanced_entries]
+  anomaly: unbalanced_entries
+- id: late
+  question: "Which entries were validated very late after their accounting date?"
+  expected_tools: [late_validation]
+  anomaly: late_validation
+- id: benford
+  question: "Do the amounts follow Benford's law?"
+  expected_tools: [benford_test]
+  anomaly: null
+- id: overview
+  question: "Give me an overview of this ledger: period, journals and totals."
+  expected_tools: [ledger_summary]
+  anomaly: null
+- id: weekend_and_round
+  question: "Find weekend postings and round-amount entries; these are classic manual-override red flags."
+  expected_tools: [weekend_entries, round_amounts]
+  anomaly: null

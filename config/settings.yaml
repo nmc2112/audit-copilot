@@ -1,0 +1,31 @@
+# Versioned configuration: behaviour changes here, not in code.
+prompt_version: v1
+
+llm:
+  primary:
+    base_url: http://localhost:11434/v1     # Ollama, OpenAI-compatible API
+    model: qwen2.5:7b
+    api_key_env: null
+  fallback:                                  # used only if the primary keeps failing
+    base_url: https://api.mistral.ai/v1
+    model: mistral-small-latest
+    api_key_env: MISTRAL_API_KEY             # fallback is disabled if this variable is not set
+  timeout_s: 120
+  max_retries: 3
+  backoff_s: 1.0
+  temperature: 0.0
+
+agent:
+  max_iterations: 6          # tool-calling rounds before the agent must answer
+  max_items_per_tool: 20     # cap on entries returned to the LLM (token control)
+  report_max_attempts: 3     # retries when the final report fails schema validation
+
+tools:                       # feature flags: remove a tool to disable it
+  enabled:
+    - ledger_summary
+    - weekend_entries
+    - round_amounts
+    - duplicate_entries
+    - unbalanced_entries
+    - late_validation
+    - benford_test
