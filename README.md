@@ -12,6 +12,12 @@ provide to auditors and the tax administration.
 > All data in this repository is **synthetic**. The generator injects known anomalies so the agent can be
 > evaluated with precision and recall. Findings are leads for an auditor, not conclusions.
 
+## Live demo
+
+**https://audit-copilot-951530503557.europe-west9.run.app** (Swagger UI). Open `POST /analyze`, type a question, leave the file empty to use the bundled synthetic FEC, and execute. Typical run: 7 tools in one round, a schema-valid report on the first attempt, about 20 s.
+
+Deployed by CD on every green CI run on `main`: GitHub Actions → Artifact Registry → Cloud Run (Paris), authenticated with Workload Identity Federation (no stored key). The cloud configuration uses the Gemini API free tier (`gemini-3.5-flash-lite`, fallback `gemini-3.8-flash`), a per-IP rate limit and at most one instance. See [deploy/DEPLOY.md](deploy/DEPLOY.md).
+
 ## Architecture
 
 ```mermaid
