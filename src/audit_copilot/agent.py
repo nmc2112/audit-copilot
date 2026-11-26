@@ -152,7 +152,7 @@ class AuditAgent:
                 except ValidationError as exc:
                     content, ok = json.dumps({"error": f"Invalid arguments: {exc.errors()}"}), False
             state["messages"].append({"role": "tool", "tool_call_id": tc.id, "content": content})
-            self._log(state, "tool", name=tc.name, ok=ok,
+            self._log(state, "tool", name=tc.name, ok=ok, args=tc.arguments,
                       latency_s=round(time.perf_counter() - start, 3))
         state["pending_calls"] = []
         return state

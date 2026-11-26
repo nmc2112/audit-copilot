@@ -1,34 +1,167 @@
-# Each case: a question, the tools a good agent should call, and (optionally)
-# the injected anomaly type whose entries should be cited in the report.
-- id: weekend
-  question: "Are there journal entries posted during weekends? List them."
-  expected_tools: [weekend_entries]
-  anomaly: weekend_entries
-- id: round
-  question: "Do we have large entries with suspiciously round amounts?"
-  expected_tools: [round_amounts]
-  anomaly: round_amounts
-- id: duplicates
-  question: "Check the ledger for possible duplicate invoices."
-  expected_tools: [duplicate_entries]
-  anomaly: duplicate_entries
-- id: unbalanced
-  question: "Is every entry balanced between debit and credit?"
-  expected_tools: [unbalanced_entries]
-  anomaly: unbalanced_entries
-- id: late
-  question: "Which entries were validated very late after their accounting date?"
-  expected_tools: [late_validation]
-  anomaly: late_validation
-- id: benford
-  question: "Do the amounts follow Benford's law?"
-  expected_tools: [benford_test]
-  anomaly: null
-- id: overview
-  question: "Give me an overview of this ledger: period, journals and totals."
-  expected_tools: [ledger_summary]
-  anomaly: null
-- id: weekend_and_round
-  question: "Find weekend postings and round-amount entries; these are classic manual-override red flags."
-  expected_tools: [weekend_entries, round_amounts]
-  anomaly: null
+# Evaluation set v2: 57 cases on three synthetic ledgers, ten audit tools.
+#
+# The six tools are deterministic, so this set measures the agent, not the tools:
+# routing (right tools), argument filling (thresholds stated in the question),
+# faithful reporting (cite what the tools found, nothing else), false alarms on a
+# clean ledger, and handling of questions the tools cannot answer.
+#
+# Fields:
+#   ledger:          standard (6 anomalies per type) | sparse (2 per type) | clean (none)
+#   expected_tools:  tools a good agent must call ([] = none needed)
+#   expected_args:   arguments the agent must pass, per tool (optional)
+#   category:        routing | paraphrase | french | arguments | multi | sparse | clean | out_of_scope | overview
+#
+# Expected cited entries are computed by running the expected tools with the
+# expected arguments on the ledger (see run_eval.py), so no entry list is stored here.
+
+# --- Routing: one direct question per tool (standard ledger) ---
+- {id: r_weekend, category: routing, ledger: standard, expected_tools: [weekend_entries],
+   question: "Are there journal entries posted during weekends? List them."}
+- {id: r_round, category: routing, ledger: standard, expected_tools: [round_amounts],
+   question: "Do we have large entries with suspiciously round amounts?"}
+- {id: r_dup, category: routing, ledger: standard, expected_tools: [duplicate_entries],
+   question: "Check the ledger for possible duplicate invoices."}
+- {id: r_unbal, category: routing, ledger: standard, expected_tools: [unbalanced_entries],
+   question: "Is every entry balanced between debit and credit?"}
+- {id: r_late, category: routing, ledger: standard, expected_tools: [late_validation],
+   question: "Which entries were validated very late after their accounting date?"}
+- {id: r_benford, category: routing, ledger: standard, expected_tools: [benford_test],
+   question: "Do the amounts follow Benford's law?"}
+
+- {id: r_gaps, category: routing, ledger: standard, expected_tools: [numbering_gaps],
+   question: "Is the EcritureNum sequence continuous, or are there gaps?"}
+- {id: r_cutoff, category: routing, ledger: standard, expected_tools: [period_end_entries],
+   question: "Which manual entries were booked in the last days before year end?"}
+- {id: r_suspense, category: routing, ledger: standard, expected_tools: [suspense_accounts],
+   question: "Are there postings to suspense accounts?"}
+- {id: r_vague, category: routing, ledger: standard, expected_tools: [vague_entries],
+   question: "Find entries with no document reference or a vague description."}
+
+# --- Paraphrases: same intent, business wording, no tool name hints ---
+- {id: p_weekend, category: paraphrase, ledger: standard, expected_tools: [weekend_entries],
+   question: "Someone may have booked entries when the office was closed. Can you check?"}
+- {id: p_round, category: paraphrase, ledger: standard, expected_tools: [round_amounts],
+   question: "I'm worried about manual top-side adjustments with suspiciously neat figures. Anything like that?"}
+- {id: p_dup, category: paraphrase, ledger: standard, expected_tools: [duplicate_entries],
+   question: "Could a supplier have been paid twice for the same bill?"}
+- {id: p_unbal, category: paraphrase, ledger: standard, expected_tools: [unbalanced_entries],
+   question: "Does the double-entry principle hold for every posting in this file?"}
+- {id: p_late, category: paraphrase, ledger: standard, expected_tools: [late_validation],
+   question: "Were some postings approved long after the fact, for example around closing?"}
+- {id: p_benford, category: paraphrase, ledger: standard, expected_tools: [benford_test],
+   question: "Does the distribution of leading digits look natural or manipulated?"}
+
+- {id: p_suspense, category: paraphrase, ledger: standard, expected_tools: [suspense_accounts],
+   question: "Did anyone park amounts in a holding account instead of booking them properly?"}
+- {id: p_vague, category: paraphrase, ledger: standard, expected_tools: [vague_entries],
+   question: "Which postings have no invoice or document behind them?"}
+
+# --- French: the target users ask in French ---
+- {id: f_weekend, category: french, ledger: standard, expected_tools: [weekend_entries],
+   question: "Y a-t-il des écritures passées le week-end ?"}
+- {id: f_round, category: french, ledger: standard, expected_tools: [round_amounts],
+   question: "Repère les écritures avec des montants ronds importants."}
+- {id: f_dup, category: french, ledger: standard, expected_tools: [duplicate_entries],
+   question: "Est-ce qu'il y a des factures fournisseurs saisies en double ?"}
+- {id: f_unbal, category: french, ledger: standard, expected_tools: [unbalanced_entries],
+   question: "Toutes les écritures sont-elles équilibrées entre débit et crédit ?"}
+- {id: f_late, category: french, ledger: standard, expected_tools: [late_validation],
+   question: "Quelles écritures ont été validées tardivement par rapport à leur date comptable ?"}
+- {id: f_benford, category: french, ledger: standard, expected_tools: [benford_test],
+   question: "Les montants respectent-ils la loi de Benford ?"}
+
+- {id: f_gaps, category: french, ledger: standard, expected_tools: [numbering_gaps],
+   question: "Y a-t-il des trous dans la numérotation des écritures ?"}
+- {id: f_cutoff, category: french, ledger: standard, expected_tools: [period_end_entries],
+   question: "Quelles écritures manuelles ont été passées juste avant la clôture de l'exercice ?"}
+
+# --- Arguments: thresholds stated in the question must reach the tool ---
+- {id: a_late_90, category: arguments, ledger: standard, expected_tools: [late_validation],
+   expected_args: {late_validation: {max_days: 90}},
+   question: "List entries validated more than 90 days after their accounting date."}
+- {id: a_late_120_fr, category: arguments, ledger: standard, expected_tools: [late_validation],
+   expected_args: {late_validation: {max_days: 120}},
+   question: "Quelles écritures ont été validées plus de 120 jours après leur date ?"}
+- {id: a_round_50k, category: arguments, ledger: standard, expected_tools: [round_amounts],
+   expected_args: {round_amounts: {min_amount: 50000}},
+   question: "Only show round-amount entries of at least 50,000 EUR."}
+- {id: a_round_10k_mult, category: arguments, ledger: standard, expected_tools: [round_amounts],
+   expected_args: {round_amounts: {multiple: 10000}},
+   question: "Find entries whose amount is an exact multiple of 10,000 EUR."}
+- {id: a_sunday, category: arguments, ledger: standard, expected_tools: [weekend_entries],
+   expected_args: {weekend_entries: {include_saturday: false}},
+   question: "Were any entries posted on a Sunday? Ignore Saturdays."}
+- {id: a_unbal_100, category: arguments, ledger: standard, expected_tools: [unbalanced_entries],
+   expected_args: {unbalanced_entries: {tolerance: 100}},
+   question: "Flag entries where debit and credit differ by more than 100 EUR."}
+
+- {id: a_cutoff_10_all, category: arguments, ledger: standard, expected_tools: [period_end_entries],
+   expected_args: {period_end_entries: {days: 10, manual_only: false}},
+   question: "Show all entries, in any journal, booked in the last 10 days of the fiscal year."}
+
+# --- Multi-tool questions ---
+- {id: m_weekend_round, category: multi, ledger: standard, expected_tools: [weekend_entries, round_amounts],
+   question: "Find weekend postings and round-amount entries; these are classic manual-override red flags."}
+- {id: m_dup_late, category: multi, ledger: standard, expected_tools: [duplicate_entries, late_validation],
+   question: "Check purchases for double-booked invoices and for invoices approved late."}
+- {id: m_full_en, category: multi, ledger: standard,
+   expected_tools: [weekend_entries, round_amounts, duplicate_entries, unbalanced_entries, late_validation,
+                    numbering_gaps, period_end_entries, suspense_accounts, vague_entries],
+   question: "Run a full journal-entry test on this ledger and report every anomaly."}
+- {id: m_full_fr, category: multi, ledger: standard,
+   expected_tools: [weekend_entries, round_amounts, duplicate_entries, unbalanced_entries, late_validation,
+                    numbering_gaps, period_end_entries, suspense_accounts, vague_entries],
+   question: "Fais une revue complète des écritures et liste toutes les anomalies."}
+- {id: m_fraud, category: multi, ledger: standard, expected_tools: [weekend_entries, round_amounts, benford_test],
+   question: "Look for signs of management override: off-hours postings, round adjustments and unnatural digit patterns."}
+
+# --- Sparse ledger: few anomalies, must still find them all ---
+- {id: s_weekend, category: sparse, ledger: sparse, expected_tools: [weekend_entries],
+   question: "Are there journal entries posted during weekends?"}
+- {id: s_round, category: sparse, ledger: sparse, expected_tools: [round_amounts],
+   question: "Any large round-amount entries?"}
+- {id: s_dup, category: sparse, ledger: sparse, expected_tools: [duplicate_entries],
+   question: "Any duplicate entries?"}
+- {id: s_unbal, category: sparse, ledger: sparse, expected_tools: [unbalanced_entries],
+   question: "Any unbalanced entries?"}
+- {id: s_full, category: sparse, ledger: sparse,
+   expected_tools: [weekend_entries, round_amounts, duplicate_entries, unbalanced_entries, late_validation,
+                    numbering_gaps, period_end_entries, suspense_accounts, vague_entries],
+   question: "Run all journal-entry tests and list every anomaly."}
+
+# --- Clean ledger: nothing to find, the report must not invent findings ---
+- {id: c_weekend, category: clean, ledger: clean, expected_tools: [weekend_entries],
+   question: "Are there journal entries posted during weekends?"}
+- {id: c_dup, category: clean, ledger: clean, expected_tools: [duplicate_entries],
+   question: "Check the ledger for possible duplicate invoices."}
+- {id: c_unbal, category: clean, ledger: clean, expected_tools: [unbalanced_entries],
+   question: "Is every entry balanced?"}
+- {id: c_full, category: clean, ledger: clean,
+   expected_tools: [weekend_entries, round_amounts, duplicate_entries, unbalanced_entries, late_validation,
+                    numbering_gaps, period_end_entries, suspense_accounts, vague_entries],
+   question: "Run a full journal-entry test and report every anomaly."}
+- {id: c_leading, category: clean, ledger: clean, expected_tools: [duplicate_entries],
+   question: "I know there are duplicate invoices in here. Which ones are they?"}
+
+- {id: c_gaps, category: clean, ledger: clean, expected_tools: [numbering_gaps],
+   question: "Is the entry numbering continuous?"}
+
+# --- Out of scope: the tools cannot answer, no entry should be cited ---
+- {id: o_vat, category: out_of_scope, ledger: standard, expected_tools: [],
+   question: "What is the standard VAT rate in Germany?"}
+- {id: o_forecast, category: out_of_scope, ledger: standard, expected_tools: [],
+   question: "Predict next year's revenue from this ledger."}
+- {id: o_delete, category: out_of_scope, ledger: standard, expected_tools: [],
+   question: "Delete the duplicate entries from the ledger."}
+- {id: o_poem, category: out_of_scope, ledger: standard, expected_tools: [],
+   question: "Write a short poem about accountants."}
+- {id: o_fr_legal, category: out_of_scope, ledger: standard, expected_tools: [],
+   question: "Quelle est la sanction légale pour un FEC non conforme ?"}
+
+# --- Overview ---
+- {id: v_summary, category: overview, ledger: standard, expected_tools: [ledger_summary],
+   question: "Give me an overview of this ledger: period, journals and totals."}
+- {id: v_summary_fr, category: overview, ledger: standard, expected_tools: [ledger_summary],
+   question: "Donne-moi un résumé du fichier : période, journaux et totaux."}
+- {id: v_count, category: overview, ledger: standard, expected_tools: [ledger_summary],
+   question: "How many entries does this file contain?"}

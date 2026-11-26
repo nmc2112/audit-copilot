@@ -29,3 +29,7 @@ tools:
     - unbalanced_entries
     - late_validation
     - benford_test
+    - numbering_gaps
+    - period_end_entries
+    - suspense_accounts
+    - vague_entries

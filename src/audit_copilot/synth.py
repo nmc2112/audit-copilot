@@ -25,19 +25,21 @@ ACCOUNTS = {
 }
 JOURNAL_LABELS = {"VE": "Ventes", "AC": "Achats", "BQ": "Banque", "OD": "Opérations diverses"}
 
-ANOMALY_TYPES = ["weekend_entries", "round_amounts", "duplicate_entries", "unbalanced_entries", "late_validation"]
+ANOMALY_TYPES = ["weekend_entries", "round_amounts", "duplicate_entries", "unbalanced_entries", "late_validation",
+                 "numbering_gaps", "period_end_entries", "suspense_accounts", "vague_entries"]
+LAST_NORMAL_DAY = 357  # ordinary entries stop on Dec 24: the last week of the year is reserved for cut-off tests
 
 
 def _weekday(rng: np.random.Generator, year: int) -> date:
     while True:
-        d = date(year, 1, 1) + timedelta(days=int(rng.integers(0, 365)))
+        d = date(year, 1, 1) + timedelta(days=int(rng.integers(0, LAST_NORMAL_DAY + 1)))
         if d.weekday() < 5:
             return d
 
 
 def _weekend(rng: np.random.Generator, year: int) -> date:
     while True:
-        d = date(year, 1, 1) + timedelta(days=int(rng.integers(0, 365)))
+        d = date(year, 1, 1) + timedelta(days=int(rng.integers(0, LAST_NORMAL_DAY + 1)))
         if d.weekday() >= 5:
             return d
 
@@ -51,13 +53,16 @@ def _amount(rng: np.random.Generator) -> float:
 
 
 def _entry(num: str, journal: str, day: date, amount: float, piece: str, label: str,
-           valid_delay: int = 2, credit_amount: float | None = None) -> list[dict]:
+           valid_delay: int = 2, credit_amount: float | None = None,
+           debit_account: tuple[str, str] | None = None) -> list[dict]:
     """Build one balanced (or deliberately unbalanced) two-line entry.
 
     The first account of the journal is debited, the second credited
     (e.g. purchases: debit 606 expense, credit 401 supplier).
     """
     (debit_acc, debit_lib), (credit_acc, credit_lib) = ACCOUNTS[journal][0], ACCOUNTS[journal][1]
+    if debit_account is not None:
+        debit_acc, debit_lib = debit_account
     credit_amount = amount if credit_amount is None else credit_amount
     common = {
         "JournalCode": journal,
@@ -122,7 +127,30 @@ def generate_fec(n_entries: int = 1000, year: int = 2025, seed: int = 42,
         rows += _entry(second, "AC", day, amount, piece, "Facture fournisseur")
         truth["duplicate_entries"] += [first, second]
 
-    for _ in range(max(1, n_per_anomaly // 2)):
+        # Gap in the numbering sequence: the next number is skipped (deleted entry?).
+        num = next_num()
+        rows += _entry(num, "VE", _weekday(rng, year), _amount(rng), f"P{num}", f"Ventes {num}")
+        truth["numbering_gaps"].append(num)
+        next_num()
+
+        # Manual entry booked in the last days of the fiscal year (cut-off risk).
+        num = next_num()
+        closing_day = date(year, 12, 31) - timedelta(days=int(rng.integers(0, 3)))
+        rows += _entry(num, "OD", closing_day, _amount(rng), f"P{num}", "Écriture d'inventaire")
+        truth["period_end_entries"].append(num)
+
+        # Posting to a suspense account (471, compte d'attente).
+        num = next_num()
+        rows += _entry(num, "OD", _weekday(rng, year), _amount(rng), f"P{num}", "Écriture manuelle",
+                       debit_account=("471000", "Compte d'attente"))
+        truth["suspense_accounts"].append(num)
+
+        # No supporting document and a vague label.
+        num = next_num()
+        rows += _entry(num, "OD", _weekday(rng, year), _amount(rng), "", "Divers")
+        truth["vague_entries"].append(num)
+
+    for _ in range(max(1, n_per_anomaly // 2) if n_per_anomaly > 0 else 0):  # 0 = clean ledger
         num = next_num()
         amount = _amount(rng)
         rows += _entry(num, "VE", _weekday(rng, year), amount, f"P{num}", "Vente",

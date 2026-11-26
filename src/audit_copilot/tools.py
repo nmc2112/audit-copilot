@@ -8,6 +8,7 @@ capped so the LLM never receives thousands of rows (token and cost control).
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Callable
 
 import numpy as np
@@ -44,6 +45,24 @@ class UnbalancedArgs(BaseModel):
 
 class LateValidationArgs(BaseModel):
     max_days: int = Field(30, ge=0, description="Maximum normal delay between entry date and validation date")
+
+
+class PeriodEndArgs(BaseModel):
+    days: int = Field(5, ge=1, le=60, description="Number of days before the fiscal year end to examine")
+    fiscal_year_end: str = Field("12-31", pattern=r"^\d{2}-\d{2}$", description="Fiscal year end as MM-DD")
+    manual_only: bool = Field(True, description="Only manual journals (OD); false = all journals")
+
+
+class SuspenseArgs(BaseModel):
+    prefixes: list[str] = Field(default_factory=lambda: ["471", "472", "473"],
+                                description="Account prefixes treated as suspense accounts (comptes d'attente)")
+    max_uses: int = Field(2, ge=0, description="Also flag accounts used in at most this many lines (0 = off)")
+
+
+class VagueArgs(BaseModel):
+    keywords: list[str] = Field(default_factory=lambda: ["divers", "ajustement", "annulation", "correction",
+                                                         "à régulariser"],
+                                description="Labels considered vague (case-insensitive, whole words)")
 
 
 # ---------- helpers ----------
@@ -118,6 +137,60 @@ def late_validation(ledger: pd.DataFrame, args: LateValidationArgs, max_items: i
                       summary=f"{len(hits)} entries validated more than {args.max_days} days after their date.")
 
 
+def numbering_gaps(ledger: pd.DataFrame, args: NoArgs, max_items: int) -> ToolResult:
+    parsed = pd.to_numeric(pd.Series(ledger["EcritureNum"].unique()), errors="coerce").dropna().astype(int)
+    nums = np.sort(parsed.to_numpy())
+    if len(nums) < 2:
+        return ToolResult(tool="numbering_gaps", summary="Not enough numbered entries to check the sequence.")
+    width = int(ledger["EcritureNum"].astype(str).str.len().max())
+    breaks = np.where(np.diff(nums) > 1)[0]
+    hits = [str(nums[i]).zfill(width) for i in breaks]
+    missing = int(sum(nums[i + 1] - nums[i] - 1 for i in breaks))
+    return ToolResult(tool="numbering_gaps", flagged_count=len(hits), flagged_entries=_cap(hits, max_items),
+                      summary=f"{len(hits)} gaps in the EcritureNum sequence ({missing} missing numbers); "
+                              "flagged entries are those just before each gap.",
+                      details={"missing_numbers": missing})
+
+
+def period_end_entries(ledger: pd.DataFrame, args: PeriodEndArgs, max_items: int) -> ToolResult:
+    year = int(ledger["EcritureDate"].max().year)
+    month, day = (int(x) for x in args.fiscal_year_end.split("-"))
+    end = pd.Timestamp(year=year, month=month, day=day)
+    if end < ledger["EcritureDate"].min():
+        end = pd.Timestamp(year=year + 1, month=month, day=day)
+    start = end - pd.Timedelta(days=args.days - 1)
+    mask = ledger["EcritureDate"].between(start, end)
+    if args.manual_only:
+        mask &= ledger["JournalCode"].eq("OD")
+    hits = ledger.loc[mask, "EcritureNum"].unique().tolist()
+    scope = "manual entries" if args.manual_only else "entries"
+    return ToolResult(tool="period_end_entries", flagged_count=len(hits), flagged_entries=_cap(hits, max_items),
+                      summary=f"{len(hits)} {scope} dated in the last {args.days} days before {end:%Y-%m-%d}.")
+
+
+def suspense_accounts(ledger: pd.DataFrame, args: SuspenseArgs, max_items: int) -> ToolResult:
+    accounts = ledger["CompteNum"].astype(str)
+    suspense = accounts.str.startswith(tuple(args.prefixes)) if args.prefixes else pd.Series(False, index=ledger.index)
+    rare = pd.Series(False, index=ledger.index)
+    if args.max_uses > 0:
+        rare = accounts.map(accounts.value_counts()) <= args.max_uses
+    hits = ledger.loc[suspense | rare, "EcritureNum"].unique().tolist()
+    return ToolResult(tool="suspense_accounts", flagged_count=len(hits), flagged_entries=_cap(hits, max_items),
+                      summary=f"{len(hits)} entries posted to suspense or rarely used accounts.",
+                      details={"suspense_lines": int(suspense.sum()), "rare_account_lines": int(rare.sum())})
+
+
+def vague_entries(ledger: pd.DataFrame, args: VagueArgs, max_items: int) -> ToolResult:
+    no_piece = ledger["PieceRef"].fillna("").astype(str).str.strip().eq("")
+    labels = ledger["EcritureLib"].fillna("").astype(str).str.lower()
+    vague = pd.Series(False, index=ledger.index)
+    for word in args.keywords:  # whole words: "divers" must not match the journal label "Opérations diverses"
+        vague |= labels.str.contains(rf"(?<!\w){re.escape(word.lower())}(?!\w)", regex=True)
+    hits = ledger.loc[no_piece | vague, "EcritureNum"].unique().tolist()
+    return ToolResult(tool="vague_entries", flagged_count=len(hits), flagged_entries=_cap(hits, max_items),
+                      summary=f"{len(hits)} entries without a supporting document reference or with a vague label.")
+
+
 BENFORD = {d: math.log10(1 + 1 / d) for d in range(1, 10)}
 
 
@@ -176,6 +249,17 @@ ALL_TOOLS: dict[str, Tool] = {
              args_model=LateValidationArgs, func=late_validation),
         Tool(name="benford_test", description="Benford first-digit test on amounts, with Nigrini conformity level.",
              args_model=NoArgs, func=benford_test),
+        Tool(name="numbering_gaps", description="Find gaps in the EcritureNum sequence (possible deleted entries).",
+             args_model=NoArgs, func=numbering_gaps),
+        Tool(name="period_end_entries",
+             description="Find entries booked in the last days before the fiscal year end (cut-off risk).",
+             args_model=PeriodEndArgs, func=period_end_entries),
+        Tool(name="suspense_accounts",
+             description="Find entries posted to suspense accounts (471/472/473) or to rarely used accounts.",
+             args_model=SuspenseArgs, func=suspense_accounts),
+        Tool(name="vague_entries",
+             description="Find entries with no supporting document reference or a vague label (e.g. 'divers').",
+             args_model=VagueArgs, func=vague_entries),
     ]
 }
 

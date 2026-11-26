@@ -53,6 +53,10 @@ flowchart LR
 | `unbalanced_entries` | Total debit different from total credit |
 | `late_validation` | Validation date long after the accounting date |
 | `benford_test` | First-digit Benford test with Nigrini's MAD conformity levels |
+| `numbering_gaps` | Gaps in the `EcritureNum` sequence (FEC numbering must be continuous) |
+| `period_end_entries` | Manual entries in the last days before fiscal year end (cut-off) |
+| `suspense_accounts` | Postings to suspense accounts (471/472/473) or rarely used accounts |
+| `vague_entries` | No `PieceRef` or a vague label (*divers*, *ajustement*, *correction*...) |
 
 ## Reliability guards
 
